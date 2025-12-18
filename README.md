@@ -54,8 +54,8 @@
 #### Para preguntas o colaboraciones, por favor contacte con el autor a través de GitHub.
 
 
-English
-Integrative multi-omic analysis of EGFR- and KRAS-driven lung adenocarcinoma
+# English
+# Integrative multi-omic analysis of EGFR- and KRAS-driven lung adenocarcinoma
 ## Project overview
 #### This repository contains all the code, figures and supporting materials used in a Master’s Thesis focused on the integrative molecular characterization of lung adenocarcinoma (LUAD), with special emphasis on tumors driven by EGFR and KRAS mutations. The project combines genomic, transcriptomic, proteomic and single-cell RNA-seq analyses, as well as survival analyses, to investigate biological differences, functional pathways and clinical implications associated with each molecular subtype.
 #### Publicly available large-scale cancer datasets, including TCGA and AACR GENIE, were leveraged to ensure robustness, reproducibility and clinical relevance of the results.
