@@ -1,0 +1,2 @@
+# TFM-adenocarcinoma-de-pulmon-KRAS-y-EGFR
+Análisis integrativo multi-ómico del adenocarcinoma de pulmón centrado en mutaciones conductoras de EGFR y KRAS, combinando datos genómicos, transcriptómicos, proteómicos y de célula única para caracterizar diferencias moleculares, funcionales y clínicas con implicaciones terapéuticas. 
