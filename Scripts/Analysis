@@ -319,3 +319,304 @@ if (requireNamespace("knitr", quietly = TRUE)) {
 # Guardar
 write.csv(top15_named, "Top15_DEGs_EGFR_vs_KRAS.csv", row.names = FALSE)
 saveRDS(dds, file = file.path(output_dir, "DESeq2_EGFR_vs_KRAS_LUAD.rds"))
+
+# Continuación clusterprofiler
+
+Cargar DEGs desde DESeq2
+
+deg <- read.csv("DEG_EGFR_vs_KRAS_LUAD.csv", row.names = 1)
+
+# Filtrar genes significativos
+deg_sig <- deg[!is.na(deg$padj) & deg$padj < 0.05, ]
+
+# Extraer ENSG limpio (sin versión)
+deg_sig$ensembl_clean <- gsub("\\..*", "", rownames(deg_sig))
+
+
+# Dividir en genes up (EGFR↑) y down (KRAS↑)
+
+up_genes <- deg_sig$ensembl_clean[deg_sig$log2FoldChange > 0]
+down_genes <- deg_sig$ensembl_clean[deg_sig$log2FoldChange < 0]
+
+cat("Genes up (EGFR):", length(up_genes), "\n")
+cat("Genes down (KRAS):", length(down_genes), "\n")
+
+# Convertir ENSG → ENTREZ (clusterProfiler lo requiere)
+
+up_entrez <- bitr(up_genes,
+                  fromType = "ENSEMBL",
+                  toType = "ENTREZID",
+                  OrgDb = org.Hs.eg.db)
+
+down_entrez <- bitr(down_genes,
+                    fromType = "ENSEMBL",
+                    toType = "ENTREZID",
+                    OrgDb = org.Hs.eg.db)
+
+# Enriquecimiento GO (BP) y KEGG
+
+ego_up <- enrichGO(gene = up_entrez$ENTREZID,
+                   OrgDb = org.Hs.eg.db,
+                   keyType = "ENTREZID",
+                   ont = "BP",
+                   pAdjustMethod = "BH")
+
+ego_down <- enrichGO(gene = down_entrez$ENTREZID,
+                     OrgDb = org.Hs.eg.db,
+                     keyType = "ENTREZID",
+                     ont = "BP",
+                     pAdjustMethod = "BH")
+
+kegg_up <- enrichKEGG(gene = up_entrez$ENTREZID,
+                      organism = "hsa")
+
+kegg_down <- enrichKEGG(gene = down_entrez$ENTREZID,
+                        organism = "hsa")
+
+# Guardar resultados
+write.csv(as.data.frame(ego_up), "GO_EGFR_upregulated.csv")
+write.csv(as.data.frame(ego_down), "GO_KRAS_upregulated.csv")
+write.csv(as.data.frame(kegg_up), "KEGG_EGFR_upregulated.csv")
+write.csv(as.data.frame(kegg_down), "KEGG_KRAS_upregulated.csv")
+
+cat("Análisis completado y guardado.\n")
+
+
+# ====================== ANÁLISIS DE PROTEÍNAS TCGA RPPA ======================================
+
+# Crear vector de grupos 
+
+sample_group <- rppa_subset %>%
+  dplyr::mutate(Group = dplyr::case_when(
+    short_id %in% egfr_short ~ "EGFR",
+    short_id %in% kras_short ~ "KRAS",
+    TRUE ~ NA_character_
+  )) %>%
+  dplyr::select(short_id, Group)
+
+rownames(sample_group) <- sample_group$short_id
+
+# Convertir sample_id a rownames y eliminar short_id
+rppa_mat <- rppa_subset %>%
+  tibble::column_to_rownames(var = "sample_id") %>%
+  dplyr::select(-short_id) %>%   # elimina short_id
+  as.matrix()
+
+# Reemplazar NA/Inf por 0
+rppa_mat[!is.finite(rppa_mat)] <- 0
+
+
+# Calcular las proteínas más variables
+# Subset top 30 proteínas más variables
+protein_var <- apply(rppa_mat, 2, sd, na.rm = TRUE)
+top_proteins <- names(sort(protein_var, decreasing = TRUE))[1:30]
+rppa_top <- rppa_mat[, top_proteins, drop = FALSE]
+
+# rppa_mat: filas = muestras, columnas = proteínas
+# sample_group: data.frame fila=muestra, columna=Group
+
+
+# Calcular medias por grupo (EGFR vs KRAS)
+
+group_df <- data.frame(
+  Sample = rownames(rppa_mat),
+  Group = sample_group$Group
+)
+
+# Crear un data frame con las medias por grupo
+mean_by_group <- sapply(top_proteins, function(prot) {
+  egfr_mean <- mean(rppa_mat[group_df$Group == "EGFR", prot], na.rm = TRUE)
+  kras_mean <- mean(rppa_mat[group_df$Group == "KRAS", prot], na.rm = TRUE)
+  c(EGFR_Mean = egfr_mean, KRAS_Mean = kras_mean)
+})
+
+mean_by_group <- as.data.frame(t(mean_by_group))
+
+
+# Calcular log2FC y asignar grupo predominante
+
+mean_by_group$log2FC <- log2(mean_by_group$EGFR_Mean / mean_by_group$KRAS_Mean)
+mean_by_group$Regulation <- ifelse(mean_by_group$log2FC > 0,
+                                   "Más alta en EGFR",
+                                   "Más alta en KRAS")
+
+
+#  Mostrar resultados ordenados
+
+mean_by_group <- mean_by_group[order(abs(mean_by_group$log2FC), decreasing = TRUE), ]
+print(mean_by_group)
+
+# Guardar tabla en CSV (Anexo 1)
+
+write.csv(mean_by_group,
+          file = file.path(output_dir, "Top30_Proteins_EGFR_KRAS_mean_by_group.csv"),
+          row.names = TRUE)
+
+# Calcular Significancia
+#  Realizar test estadístico (t-test) para cada proteína
+
+results_list <- lapply(top_proteins, function(prot) {
+  data_tmp <- data.frame(
+    Expression = rppa_mat[, prot],
+    Group = group_df$Group
+  )
+  test <- t.test(Expression ~ Group, data = data_tmp)
+  data.frame(
+    Protein = prot,
+    Mean_EGFR = mean(data_tmp$Expression[data_tmp$Group == "EGFR"], na.rm = TRUE),
+    Mean_KRAS = mean(data_tmp$Expression[data_tmp$Group == "KRAS"], na.rm = TRUE),
+    log2FC = log2(mean(data_tmp$Expression[data_tmp$Group == "EGFR"], na.rm = TRUE) /
+                  mean(data_tmp$Expression[data_tmp$Group == "KRAS"], na.rm = TRUE)),
+    p_value = test$p.value
+  )
+})
+
+protein_stats <- do.call(rbind, results_list)
+
+#  Ajustar p-valores por FDR (corrección de Benjamini-Hochberg)
+
+protein_stats$padj <- p.adjust(protein_stats$p_value, method = "BH")
+
+#  Determinar dirección (sobreexpresada en EGFR o KRAS)
+
+protein_stats$Regulation <- ifelse(protein_stats$log2FC > 0, "Sobreexpresada en EGFR", "Sobreexpresada en KRAS")
+
+#  Filtrar proteínas significativas (padj < 0.05)
+
+signif_proteins <- subset(protein_stats, padj < 0.05)
+
+
+# Mostrar resultados ordenados por significancia
+
+signif_proteins <- signif_proteins[order(signif_proteins$padj), ]
+print(signif_proteins)
+
+#  Guardar 
+write.csv(signif_proteins,
+          file = file.path(output_dir, "RPPA_DE_Proteins_EGFR_vs_KRAS.csv"),
+          row.names = FALSE)
+
+
+# ====================== ANÁLISIS DE RNAseq ======================================
+
+# Resumen estadístico básico por gen
+
+for (gene in rownames(seu_subset)) {
+  cat("\n📊 Expresión resumida para", gene, ":\n")
+  expr_vals <- as.numeric(GetAssayData(seu_subset, slot = "counts")[gene, ])
+  print(summary(expr_vals))
+  cat("Células con expresión > 0:", sum(expr_vals > 0), "\n")
+}
+
+# Comparación numérica entre EGFR y KRAS
+
+counts_mat <- GetAssayData(seu_subset, slot = "counts")
+
+expr_df <- data.frame(
+  Cell = colnames(counts_mat),
+  EGFR = as.numeric(counts_mat["EGFR", ]),
+  KRAS = as.numeric(counts_mat["KRAS", ])
+)
+
+expr_summary <- expr_df %>%
+  summarise(
+    mean_EGFR = mean(EGFR),
+    mean_KRAS = mean(KRAS),
+    median_EGFR = median(EGFR),
+    median_KRAS = median(KRAS),
+    prop_EGFR_pos = mean(EGFR > 0),
+    prop_KRAS_pos = mean(KRAS > 0)
+  )
+
+cat("\n📈 Resumen comparativo entre EGFR y KRAS:\n")
+print(expr_summary)
+
+
+# Contnuación análisis Single cell
+genes_interes <- c("EGFR", "KRAS")
+
+# Extraer expresión normalizada (slot "data") para los genes de interés
+expr_mat <- GetAssayData(seu_subset, assay = "RNA", slot = "data")[genes_interes, ]
+
+# Determinar células positivas para cada gen
+egfr_cells <- colnames(expr_mat)[expr_mat["EGFR", ] > 0]
+kras_cells <- colnames(expr_mat)[expr_mat["KRAS", ] > 0]
+
+# Crear columna "Group" en metadata
+seu_subset$Group <- NA
+seu_subset$Group[colnames(seu_subset) %in% egfr_cells] <- "EGFR"
+seu_subset$Group[colnames(seu_subset) %in% kras_cells] <- "KRAS"
+
+table(seu_subset$Group)
+
+rppa_long <- as.data.frame(expr_mat) %>%
+  rownames_to_column(var = "Gene") %>%
+  pivot_longer(
+    cols = -Gene,
+    names_to = "Cell",
+    values_to = "Expression"
+  )
+
+# Añadir columna Group
+rppa_long <- merge(rppa_long,
+                   data.frame(Cell = colnames(seu_subset),
+                              Group = seu_subset$Group),
+                   by = "Cell",
+                   all.x = TRUE)
+
+# Resumen estadístico
+summary_stats <- rppa_long %>%
+  group_by(Gene, Group) %>%
+  summarise(
+    mean_expr = mean(Expression, na.rm = TRUE),
+    median_expr = median(Expression, na.rm = TRUE),
+    prop_pos = sum(Expression > 0)/n(),
+    .groups = "drop"
+  )
+print(summary_stats)
+
+
+
+# ====================== ANÁLISIS DE SUPERVIVENCIA TCGA ======================================
+
+# Cargar MAF de LUAD
+luad_maf <- tcga_load(study = "LUAD")
+
+maf_dt_clean <- as.data.frame(luad_maf@data, stringsAsFactors = FALSE) %>%
+  distinct(Hugo_Symbol, Tumor_Sample_Barcode)
+
+# Identificar mutaciones EGFR / KRAS
+egfr_samples <- maf_dt_clean %>%
+  filter(Hugo_Symbol == "EGFR") %>%
+  pull(Tumor_Sample_Barcode) %>% unique()
+
+kras_samples <- maf_dt_clean %>%
+  filter(Hugo_Symbol == "KRAS") %>%
+  pull(Tumor_Sample_Barcode) %>% unique()
+
+# Extraer datos clínicos y de supervivencia
+clin_df <- luad_maf@clinical.data
+
+clin_df$Group <- "None"
+clin_df$Group[clin_df$Tumor_Sample_Barcode %in% egfr_samples] <- "EGFR"
+clin_df$Group[clin_df$Tumor_Sample_Barcode %in% kras_samples] <- "KRAS"
+
+# Crear variables OS.time y OS 
+surv_df <- clin_df %>%
+  filter(Group %in% c("EGFR", "KRAS")) %>%
+  mutate(
+    # Convertir "Dead" / "Alive" a 1 / 0
+    OS = ifelse(vital_status == "Dead", 1, 0),
+
+    # OS.time: muerte o último seguimiento
+    OS.time = ifelse(!is.na(days_to_death),
+                     days_to_death,
+                     days_to_last_followup),
+
+    OS.time = as.numeric(OS.time),
+    # Convertir a meses
+    OS.time = OS.time / 30.44,
+
+    Group = factor(Group, levels = c("EGFR", "KRAS"))
+  ) %>%
+  filter(!is.na(OS.time))
