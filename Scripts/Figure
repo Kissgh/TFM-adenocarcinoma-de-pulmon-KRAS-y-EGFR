@@ -255,3 +255,221 @@ ggsave(
 )
 
 cat("Volcano Plot guardado en:", volcano_file, "\n")
+
+# ============================================================
+# Continuación clusterprofiler
+
+# FIGURA 5. DOTPLOT # procesos biológicos y rutas moleculares para ontologías de Gene Ontology.
+dotplot(ego_up, showCategory = 15) + ggtitle("GO BP — EGFR Upregulated")
+dotplot(ego_down, showCategory = 15) + ggtitle("GO BP — KRAS Upregulated")
+
+# FIGURA 6. DOTPLOT # procesos biológicos y rutas moleculares para rutas KEGG
+dotplot(kegg_up, showCategory = 15) + ggtitle("KEGG — EGFR Upregulated")
+dotplot(kegg_down, showCategory = 15) + ggtitle("KEGG — KRAS Upregulated")
+
+#===============================================================
+# FIGURA 7. BOXPLOT # top 30 proteínas 
+
+rppa_long_top <- rppa_top %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "sample") %>%
+  mutate(sample_short = substr(sample, 1, 12),
+         Group = case_when(
+           sample_short %in% egfr_short ~ "EGFR",
+           sample_short %in% kras_short ~ "KRAS",
+           TRUE ~ NA_character_
+         )) %>%
+  tidyr::pivot_longer(
+    cols = -c(sample, sample_short, Group),
+    names_to = "Protein",
+    values_to = "Expression"
+  ) %>%
+  filter(!is.na(Group))  # eliminar muestras sin grupo
+
+# Verificar muestra en cada grupo
+table(rppa_long_top$Group)
+
+# Grafico
+boxplot_file <- file.path(output_dir, "RPPA_Boxplots_Top30_EGFR_KRAS.png")
+png(filename = boxplot_file, width = 2500, height = 1800, res = 300)
+
+ggplot(rppa_long_top, aes(x = Group, y = Expression, fill = Group)) +
+  geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
+  facet_wrap(~Protein, scales = "free_y", ncol = 5) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    axis.text.y = element_text(size = 8),
+    legend.position = "top"
+  ) +
+  labs(
+    title = "RPPA Protein Expression - Top 30 Proteins",
+    x = "",
+    y = "Expression (scaled)"
+  ) +
+  scale_fill_manual(values = c("EGFR" = "#FF6F61", "KRAS" = "#6A5ACD"))
+
+dev.off()
+cat("✅ Boxplots guardados en:", boxplot_file, "\n")
+
+#===============================================================
+# FIGURA 8. VOLCANO PLOT RPPA (EGFR vs KRAS)
+
+volcano_df <- as.data.frame(protein_stats, stringsAsFactors = FALSE)
+
+# Ajuste de datos para gráfica
+volcano_df$log2FC_num <- as.numeric(volcano_df$log2FC)
+volcano_df$pvalue_num <- as.numeric(volcano_df$p_value)
+volcano_df$padj_num   <- as.numeric(volcano_df$padj)
+
+volcano_df$log2FC_num[is.infinite(volcano_df$log2FC_num)] <- NA_real_
+volcano_df$log2FC_num[is.nan(volcano_df$log2FC_num)] <- NA_real_
+
+min_pos_padj <- suppressWarnings(min(volcano_df$padj_num[volcano_df$padj_num > 0], na.rm = TRUE))
+if (is.infinite(min_pos_padj) || is.na(min_pos_padj)) {
+  tiny_val <- 1e-300
+} else {
+  tiny_val <- min_pos_padj * 0.5
+}
+volcano_df$padj_safe <- volcano_df$padj_num
+volcano_df$padj_safe[is.na(volcano_df$padj_safe)] <- 1         
+volcano_df$padj_safe[volcano_df$padj_safe == 0] <- tiny_val    
+
+volcano_df$Regulation2 <- ifelse(!is.na(volcano_df$padj_num) & volcano_df$padj_num < 0.05 & volcano_df$log2FC_num > 0,
+                                 "Sobreexpresada en EGFR",
+                         ifelse(!is.na(volcano_df$padj_num) & volcano_df$padj_num < 0.05 & volcano_df$log2FC_num < 0,
+                                "Sobreexpresada en KRAS",
+                                "No significativa"))
+
+# Estadísticas para la gráfica
+n_total_prot <- nrow(volcano_df)
+n_sig <- sum(volcano_df$padj_num < 0.05, na.rm = TRUE)
+n_up_egfr <- sum(volcano_df$padj_num < 0.05 & volcano_df$log2FC_num > 0, na.rm = TRUE)
+n_up_kras <- sum(volcano_df$padj_num < 0.05 & volcano_df$log2FC_num < 0, na.rm = TRUE)
+cat("Proteínas totales examinadas:", n_total_prot, "\n")
+cat("Proteínas significativas (padj < 0.05):", n_sig, "\n")
+cat("  - Sobreexpresadas en EGFR:", n_up_egfr, "\n")
+cat("  - Sobreexpresadas en KRAS:", n_up_kras, "\n\n")
+
+# etiquetas: top por padj y top por magnitud
+top_by_padj <- volcano_df %>% dplyr::filter(!is.na(padj_num)) %>% dplyr::arrange(padj_num) %>% head(10)
+top_by_fc   <- volcano_df %>% dplyr::arrange(desc(abs(log2FC_num))) %>% head(10)
+label_proteins <- unique(c(top_by_padj$Protein, top_by_fc$Protein))
+
+# Gráfico
+
+volcano_plot_object <- ggplot(volcano_df %>% dplyr::filter(!is.na(log2FC_num)),
+       aes(x = log2FC_num, y = -log10(padj_safe), color = Regulation2)) +
+  geom_point(alpha = 0.85, size = 3) +
+  geom_vline(xintercept = c(-0.58, 0.58), linetype = "dashed", color = "gray50") +   # approx log2FC of 1.5-fold ≈ 0.58
+  geom_hline(yintercept = -log10(0.05), linetype = "dotted", color = "gray50") +
+  scale_color_manual(values = c("Sobreexpresada en EGFR" = "#E64B35FF",
+                                "Sobreexpresada en KRAS" = "#00A087FF",
+                                "No significativa" = "gray70")) +
+  geom_text_repel(data = subset(volcano_df, Protein %in% label_proteins),
+                  aes(label = Protein),
+                  size = 3,
+                  max.overlaps = 50,
+                  box.padding = 0.3,
+                  point.padding = 0.2) +
+  labs(title = "Volcano plot: RPPA EGFR vs KRAS",
+       x = "Log2 fold change (media EGFR - media KRAS)",
+       y = "-log10(FDR ajustado)") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top") +
+  coord_cartesian(ylim = c(0, 10))   # <<< límite del eje Y
+
+print(volcano_plot_object)
+
+# guardar
+volcano_png_path <- file.path(output_dir, "RPPA_Volcano_EGFR_vs_KRAS.png")
+ggsave(filename = volcano_png_path, plot = volcano_plot_object, width = 9, height = 7, dpi = 300)
+cat("Volcano guardado en:", volcano_png_path, "\n")
+
+
+#===============================================================
+# FIGURA 9. 
+# A.  VIOLIN + DOT PLOT # Expresión de EGFR y KRAS en células individuales
+
+ggplot(rppa_long, aes(x = Group, y = Expression, fill = Group)) +
+  geom_violin(scale = "width", alpha = 0.6, trim = TRUE) +
+  geom_jitter(width = 0.2, size = 0.5, alpha = 0.5, color = "black") +
+  facet_wrap(~Gene, scales = "free_y") +
+  scale_fill_manual(values = c("EGFR" = "#FF6F61", "KRAS" = "#6A5ACD")) +
+  coord_cartesian(ylim = c(0, 10)) +
+  theme_minimal(base_size = 14) +
+  labs(title = "Expresión de EGFR y KRAS en células individuales",
+       x = "Grupo",
+       y = "Expresión (normalizada)") +
+  theme(legend.position = "top")
+
+# B. VIOLIN PLOT (Distribución de expresión de EGFR y KRAS)
+expr_long <- expr_df %>%
+  pivot_longer(cols = c(EGFR, KRAS), names_to = "Gene", values_to = "Expression")
+
+ggplot(expr_long, aes(x = Gene, y = Expression, fill = Gene)) +
+  geom_violin(trim = TRUE, alpha = 0.7, color = "gray40") +
+  geom_boxplot(width = 0.1, color = "black", outlier.size = 0.3, alpha = 0.8) +
+  scale_fill_manual(values = c("EGFR" = "#FF6F61", "KRAS" = "#6A5ACD")) +
+  labs(title = "Distribución de expresión de EGFR y KRAS",
+       x = "", y = "UMI counts") +
+  coord_cartesian(ylim = c(0, 3.5)) +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none")
+
+
+#===============================================================
+# FIGURA 10. SCATTERPLOT   # correlación célula a célula
+
+ggplot(expr_df, aes(x = EGFR, y = KRAS)) +
+  geom_point(alpha = 0.3, size = 1, color = "#00A087FF") +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  labs(title = "Correlación de expresión entre EGFR y KRAS por célula",
+       x = "EGFR (UMI counts)",
+       y = "KRAS (UMI counts)") +
+  coord_cartesian(xlim = c(0, 50), ylim = c(0, 50)) +
+  theme_minimal(base_size = 14)
+
+
+#===============================================================
+# FIGURA 11. KAPLAN MEIER # Supervivencia global de entre los grupos EGFR y KRAS de LUAD_ TCGA
+surv_obj <- Surv(time = surv_df$OS.time, event = surv_df$OS)
+
+fit <- survfit(surv_obj ~ Group, data = surv_df)
+
+km_plot <- ggsurvplot(
+  fit,
+  data = surv_df,
+  pval = TRUE,
+  conf.int = TRUE,
+  risk.table = TRUE,
+  risk.table.height = 0.25,
+  risk.table.y.text.col = TRUE,
+  risk.table.y.text = FALSE,
+  palette = c("#E7B800", "#2E9FDF"),
+  legend.labs = c("EGFR-mutated", "KRAS-mutated"),
+  legend.title = "Group",
+  ggtheme = theme_minimal()
+)
+
+print(km_plot)
+
+# Guardar
+ggsave(
+  file.path(output_dir, "KM_OS_EGFR_vs_KRAS.png"),
+  km_plot$plot,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+ggsave(
+  file.path(output_dir, "KM_OS_EGFR_vs_KRAS_risktable.png"),
+  km_plot$table,
+  width = 8,
+  height = 3,
+  dpi = 300
+)
+
+cat("\nAnálisis Kaplan-Meier completado correctamente.\n")
+
