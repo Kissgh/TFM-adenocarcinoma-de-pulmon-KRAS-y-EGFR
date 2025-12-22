@@ -25,7 +25,7 @@
 #### • ggplot2 – visualización de datos
 
 ## Contenidos
-#### • Scripts en R completamente anotados utilizados para reproducir todos los análisis.
+#### • Scripts en R utilizados para reproducir todos los análisis.
 #### • Tablas de resultados procesados (DEGs, salidas de enriquecimiento, resúmenes de supervivencia).
 #### • Figuras de alta resolución utilizadas en el trabajo.
 #### • Documentación que describe los pasos analíticos y los supuestos.
@@ -64,7 +64,7 @@
 #### •	ggplot2 – data visualization
 
 ## Contents
-#### •	Fully annotated R scripts used to reproduce all analyses.
+#### •	R scripts used to reproduce all analyses.
 #### •	Processed result tables (DEGs, enrichment outputs, survival summaries).
 #### •	High-resolution figures used in the thesis.
 #### •	Documentation describing analytical steps and assumptions.
