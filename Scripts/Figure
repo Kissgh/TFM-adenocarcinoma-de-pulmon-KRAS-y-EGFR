@@ -1,0 +1,3 @@
+
+#Oncoplot global (No filtado por EGFR ni KRAS)
+oncoplot(maf = TCGAmutations::tcga_load(study = "LUAD"), top = 70)
