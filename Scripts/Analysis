@@ -4,3 +4,99 @@
 # Genes mutados entre EGFR y KRAS (top 15)
 comp_res <- read.csv(file.path(output_dir, "EGFR_vs_KRAS_mafCompare_results.csv"))
 knitr::kable(head(comp_res, 15), caption = "Genes mutados entre EGFR y KRAS (top 15)")
+
+#-----------------------------------------
+# Resumen de  tipos de mutación # Excluyendo long genes o FLAG genes
+
+get_mutation_summary <- function(maf_obj) {
+  
+  df <- maf_obj@data %>%
+    as.data.frame(stringsAsFactors = FALSE)
+  
+  # Tipos de mutación que quieres incluir
+  mutation_types <- c(
+    "Frame_Shift_Del",
+    "Frame_Shift_Ins",
+    "In_Frame_Del",
+    "In_Frame_Ins",
+    "Missense_Mutation",
+    "Nonsense_Mutation",
+    "Nonstop_Mutation",
+    "Splice_Site",
+    "Translation_Start_Site"
+  )
+  
+  summary_df <- df %>%
+    filter(Variant_Classification %in% mutation_types) %>%
+    group_by(Variant_Classification) %>%
+    summarise(Count = n()) %>%
+    mutate(
+      Percent = round(Count / sum(Count) * 100, 2)
+    ) %>%
+    arrange(desc(Count))
+  
+  return(summary_df)
+}
+
+
+# Aplicar a KRAS y EGFR filtrados
+
+egfr_summary <- get_mutation_summary(maf_egfr_filt)
+kras_summary <- get_mutation_summary(maf_kras_filt)
+no_egfr_no_kras_summary <- get_mutation_summary(maf_none_filt)
+
+# Resultados
+egfr_summary
+kras_summary
+no_egfr_no_kras_summary
+
+#-----------------------------------------
+# Análisis de Mutaciones según por el codon especifico mutado
+# solo mutaciones con ≥5 ocurrencias, porque hay muchas mutaciones raras y se solapan
+
+# ===============================================================
+# Recargar y normalizar el objeto MAF (luad_maf)
+
+luad_maf <- TCGAmutations::tcga_load(study = "LUAD")
+
+print("Resumen general del MAF LUAD:")
+print(luad_maf)
+mafSummary(luad_maf)
+# Normalizamos el campo de los nombres de los genes
+luad_maf@data$Hugo_Symbol <- trimws(toupper(luad_maf@data$Hugo_Symbol))
+
+# Corregimos posibles variantes del nombre de KRAS (por ejemplo "K-RAS")
+luad_maf@data$Hugo_Symbol[luad_maf@data$Hugo_Symbol %in% c("K-RAS", "K RAS")] <- "KRAS"
+
+# Confirmar que KRAS ahora sí está presente y contar mutaciones
+cat("Mutaciones encontradas para KRAS:\n")
+table(luad_maf@data$Hugo_Symbol)[grep("KRAS", names(table(luad_maf@data$Hugo_Symbol)))]
+
+# ===============================================================
+# Subset del MAF solo con EGFR y KRAS
+
+egfr_kras <- subsetMaf(luad_maf, genes = c("EGFR", "KRAS"), mafObj = FALSE)
+
+# Aseguramos formato data.frame para dplyr
+egfr_kras <- as.data.frame(egfr_kras)
+
+# ===============================================================
+# Limpieza y conteo de mutaciones por gen y codón
+
+mut_summary <- egfr_kras %>%
+  dplyr::select(Hugo_Symbol, HGVSp_Short) %>%
+  dplyr::mutate(
+    Codon = gsub("^p\\.", "", HGVSp_Short)
+  )
+
+# Contar frecuencia y calcular porcentaje
+freq_table <- mut_summary %>%
+  group_by(Hugo_Symbol, Codon) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Percent = 100 * Count / sum(Count)) %>%
+  filter(Count >= 5)   # mostrar solo mutaciones con ≥5 ocurrencias
+
+# Mostrar resumen 
+freq_table %>% arrange(desc(Count))
+
+
