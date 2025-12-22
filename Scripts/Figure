@@ -164,3 +164,94 @@ oncoplot(
 )
 dev.off()
 
+
+#===============================================================
+# FIGURA 4. VOLCANO PLOT #  genes diferencialmente expresados entre los grupos EGFR y KRAS de LUAD_ TCGA
+
+plot(1:10)
+
+# Genes sobreexpresados para cada Gen
+# Seleccionar top 50 (porque en top 15 solo hay un KRAS y en 30 hay 2)
+top50_named <- deg_signif[1:50, c("symbol", "log2FoldChange", "pvalue", "padj")]
+top50_named_df <- as.data.frame(top50_named)
+
+# 3 genes más sobreexpresados en EGFR
+egfr_top <- top50_named_df[top50_named_df$log2FoldChange > 0, ][1:3, ]
+
+#  3 genes más sobreexpresados en KRAS
+kras_top <- top50_named_df[top50_named_df$log2FoldChange < 0, ][1:3, ]
+
+# Ver nombres
+egfr_top$symbol
+kras_top$symbol
+
+# Visualización rápida (Volcano plot)
+# resultados a data.frame y ajuste de nomenclatura de genes
+res_df <- as.data.frame(res_ordered)
+res_df$gene <- rownames(res_df)
+
+gene_symbols <- as.data.frame(rowData(data_exp)) %>%
+  dplyr::select(ensembl_id = gene_id, gene_name)
+
+gene_symbols$ensembl_id <- sub("\\..*$", "", gene_symbols$ensembl_id)
+res_df$ensembl_clean <- sub("\\..*$", "", res_df$gene)
+
+res_df <- res_df %>%
+  left_join(gene_symbols, by = c("ensembl_clean" = "ensembl_id"))
+
+# Columna final con el nombre del gen
+res_df$gene_label <- ifelse(is.na(res_df$gene_name), res_df$gene, res_df$gene_name)
+
+# Definimos Significancia y dirección
+res_df$regulation <- ifelse(res_df$padj < 0.05 & res_df$log2FoldChange > 1, "Upregulated",
+                     ifelse(res_df$padj < 0.05 & res_df$log2FoldChange < -1, "Downregulated", "Not Significant"))
+
+# Seleccionamos los genes más extremos para etiquetar
+top_genes <- res_df %>%
+  filter(padj < 0.01 & abs(log2FoldChange) > 2) %>%
+  arrange(padj) %>%
+  head(40)  # etiquetas solo los 20 más relevantes
+
+# Creamos volcano plot
+volcano_plot <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = regulation)) +
+  geom_point(alpha = 0.7, size = 2) +
+  scale_color_manual(values = c("Downregulated" = "blue", 
+                                "Not Significant" = "grey70", 
+                                "Upregulated" = "red")) +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed", color = "black", linewidth = 0.4) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "black", linewidth = 0.4) +
+  geom_text_repel(
+    data = top_genes,
+   aes(label = gene_label),
+    size = 3.2,
+    max.overlaps = 150,
+    box.padding = 0.5,
+    point.padding = 0.3
+  ) +
+  labs(title = "Volcano Plot — EGFR vs KRAS (LUAD)",
+       x = expression(log[2]~Fold~Change),
+       y = expression(-log[10]~Adjusted~pvalue),
+       color = "Regulation") +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+    legend.position = "top"
+  ) +
+  coord_cartesian(ylim = c(0, 60))  
+
+# Mostrar en RStudio
+print(volcano_plot)
+
+
+# Guardar 
+volcano_file <- file.path(output_dir, "VolcanoPlot_EGFR_vs_KRAS_LUAD.png")
+
+ggsave(
+  filename = volcano_file,
+  plot = volcano_plot,
+  width = 9,
+  height = 7,
+  dpi = 300
+)
+
+cat("Volcano Plot guardado en:", volcano_file, "\n")
