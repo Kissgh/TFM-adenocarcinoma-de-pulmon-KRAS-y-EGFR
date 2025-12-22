@@ -620,3 +620,6 @@ surv_df <- clin_df %>%
     Group = factor(Group, levels = c("EGFR", "KRAS"))
   ) %>%
   filter(!is.na(OS.time))
+
+
+# ====================== ANÁLISIS GENIE ======================================
