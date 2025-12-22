@@ -59,7 +59,7 @@ if (!dir.exists(output_dir)) {
 
 cat("Guardando archivos en:", output_dir, "\n\n")
 
-# ====================== CARGA DE DATOS ======================================
+# ====================== CARGA DE DATOS GENERALES======================================
 
 luad_maf <- TCGAmutations::tcga_load(study = "LUAD") # Base publica de TCGA especificamente de Ca. Pulmón
 
@@ -67,94 +67,16 @@ print("Resumen general del MAF LUAD:")
 print(luad_maf)
 mafSummary(luad_maf)
 
-# ====================== ANÁLISIS GENERAL DE MUTACIONES ==============================
 
-gene_summary <- getGeneSummary(luad_maf) %>% arrange(desc(AlteredSamples))
-genes_of_interest <- c("EGFR", "KRAS") #Filtro por mis dos genes de interes ya que el análisis total puede ser muy pesado
+# ====================== DATOS DE EXPRESIÓN GÉNICA (RNA-seq) de TCGA-LUAD ===================
 
-maf_dt_clean <- luad_maf@data %>%
-  as.data.frame(stringsAsFactors = FALSE) %>%
-  dplyr::select(Hugo_Symbol, Tumor_Sample_Barcode) %>%
-  dplyr::distinct()
-
-colnames(maf_dt_clean)
-
-egfr_samples <- maf_dt_clean %>%
-  filter(Hugo_Symbol == "EGFR") %>%
-  pull(Tumor_Sample_Barcode) %>%
-  unique() %>% sort()
-
-kras_samples <- maf_dt_clean %>%
-  filter(Hugo_Symbol == "KRAS") %>%
-  pull(Tumor_Sample_Barcode) %>%
-  unique() %>% sort()
-
-cat("Número de muestras con mutaciones EGFR:", length(egfr_samples), "\n")
-cat("Número de muestras con mutaciones KRAS:", length(kras_samples), "\n")
-
-write.csv(data.frame(EGFR_samples = egfr_samples),
-          file = file.path(output_dir, "EGFR_mutated_samples_LUAD.csv"),
-          row.names = FALSE)
-
-write.csv(data.frame(KRAS_samples = kras_samples),
-          file = file.path(output_dir, "KRAS_mutated_samples_LUAD.csv"),
-          row.names = FALSE)
-
-egfr_maf <- subsetMaf(maf = luad_maf, tsb = egfr_samples, mafObj = TRUE)
-kras_maf <- subsetMaf(maf = luad_maf, tsb = kras_samples, mafObj = TRUE)
-
-comp_res <- mafCompare(m1 = egfr_maf,
-                       m2 = kras_maf,
-                       m1Name = "EGFR_mut",
-                       m2Name = "KRAS_mut",
-                       minMut = 3)
-
-write.csv(comp_res$results,
-          file = file.path(output_dir, "EGFR_vs_KRAS_mafCompare_results.csv"),
-          row.names = FALSE)
-
-total_samples <- unique(luad_maf@clinical.data$Tumor_Sample_Barcode) %>% length()
-
-freq_table <- data.frame(
-  Gene = genes_of_interest,
-  AlteredSamples = c(length(egfr_samples), length(kras_samples)),
-  Percent = c(length(egfr_samples), length(kras_samples)) / total_samples * 100,
-  Total_Samples = total_samples
+query_exp <- GDCquery(
+  project = "TCGA-LUAD",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  workflow.type = "STAR - Counts" 
 )
 
-write.csv(freq_table,
-          file = file.path(output_dir, "EGFR and KRAS mutation frequencies in LUAD.csv"),
-          row.names = FALSE)
-
-# Coocurrencia
-onc_matrix <- maftools::oncoplot(maf = luad_maf, writeMatrix = TRUE)$oncoMatrix
-
-if (all(genes_of_interest %in% rownames(onc_matrix))) {
-  egfr_kras_matrix <- onc_matrix[genes_of_interest, , drop = FALSE]
-  total_samples <- ncol(egfr_kras_matrix)
-  egfr_pos <- colSums(egfr_kras_matrix["EGFR", , drop = FALSE] != 0) > 0
-  kras_pos <- colSums(egfr_kras_matrix["KRAS", , drop = FALSE] != 0) > 0
-  both <- sum(egfr_pos & kras_pos)
-  only_egfr <- sum(egfr_pos & !kras_pos)
-  only_kras  <- sum(kras_pos & !egfr_pos)
-  neither     <- total_samples - (both + only_egfr + only_kras)
-  co_table <- data.frame(Condition = c("Both", "Only_EGFR", "Only_KRAS", "Neither"),
-                         Count = c(both, only_egfr, only_kras, neither))
-  write.csv(co_table,
-            file = file.path(output_dir, "EGFR_KRAS_cooccurrence_LUAD.csv"),
-            row.names = FALSE)
-}
-
-saveRDS(egfr_maf, file = file.path(output_dir, "EGFR_subset_maf_LUAD.rds"))
-saveRDS(kras_maf, file = file.path(output_dir, "KRAS_subset_maf_LUAD.rds"))
-
-
-
-# Revisión de datos guardados
-# Resumen general de mutaciones (todo el objeto Maf)
-luad_maf <- readRDS(file.path(output_dir, "EGFR_subset_maf_LUAD.rds")) 
-print(luad_maf)
-View(luad_maf)
-
-
+GDCdownload(query_exp)
+data_exp <- GDCprepare(query = query_exp)
 
