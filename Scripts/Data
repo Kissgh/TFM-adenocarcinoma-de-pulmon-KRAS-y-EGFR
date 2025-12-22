@@ -80,3 +80,51 @@ query_exp <- GDCquery(
 GDCdownload(query_exp)
 data_exp <- GDCprepare(query = query_exp)
 
+
+# ====================== DATOS DE PROTEÍNAS TCGA RPPA ======================================
+
+rppa_file <- file.path(output_dir, "TCPA_TCGA_RPPA500.tsv")
+rppa <- read.delim(rppa_file, stringsAsFactors = FALSE)
+
+# Primera columna es sample_id
+colnames(rppa)[1] <- "sample_id"
+
+rppa$short_id <- substr(rppa$sample_id, 1, 12)
+egfr_short <- substr(egfr_samples, 1, 12)
+kras_short <- substr(kras_samples, 1, 12)
+all_samples_short <- unique(c(egfr_short, kras_short))
+
+# Comprobar match entre datos de px TCGA y RPPA y Subset de RPPA para esas muestras
+samples_in_rppa <- intersect(all_samples_short, rppa$short_id)
+cat("Número de muestras RPPA coincidentes:", length(samples_in_rppa), "\n")
+rppa_subset <- rppa %>% filter(short_id %in% samples_in_rppa)
+
+
+# ====================== DATOS DE RNAseq ======================================
+#library(Seurat)
+
+# Cargar expresión cruda directamente desde el archivo comprimido ya descargado
+expr <- readRDS(gzcon(file("/Users/kissyguevara/Desktop/MASTER/TFM/Datos R/GSE131907_Lung_Cancer_raw_UMI_matrix.rds", "rb")))
+
+# Buscar nombres exactos de EGFR y KRAS en el objeto
+genes_encontrados <- grep("EGFR|KRAS", rownames(expr), value = TRUE)
+genes_encontrados
+
+# Filtrar solo esos genes directamente desde la matriz cruda (sino da error)
+
+genes_interes <- genes_encontrados  
+expr_subset <- expr[rownames(expr) %in% genes_interes, ]
+dim(expr_subset)  # debería mostrar 2 filas (genes) x muchas columnas (células)
+
+# crear un objeto Seurat pequeño
+seu_subset <- CreateSeuratObject(counts = expr_subset)
+print(seu_subset)
+
+# Ver resumen de expresión de EGFR y KRAS
+for (gene in rownames(seu_subset)) {
+  cat("\nExpresión resumida para", gene, ":\n")
+  print(summary(as.numeric(GetAssayData(seu_subset, slot = "counts")[gene, ])))
+}
+
+
+
