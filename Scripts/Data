@@ -127,4 +127,7 @@ for (gene in rownames(seu_subset)) {
 }
 
 
+# ====================== DATOS GENIE ======================================
+Los datos del consorcio AACR Project GENIE y GENIE-BPC NSCLC v2.0-public se obtuvieron a través de la plataforma cBioPortal for Cancer Genomics previo registro, 
+Se descargaron los archivos estandarizados de mutaciones (MAF), alteraciones en número de copias (CNA), y metadatos clínicos y patológicos, entre otros.
 
