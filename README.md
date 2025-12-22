@@ -23,24 +23,7 @@
 #### • survival, survminer – análisis de supervivencia
 #### • Seurat – análisis de RNA-seq de célula única
 #### • ggplot2 – visualización de datos
-## Estructura del repositorio
-#### ├── scripts/
-#### │   ├── genomics/
-#### │   ├── transcriptomics/
-#### │   ├── proteomics/
-#### │   ├── scRNAseq/
-#### │   └── survival/
-#### ├── figures/
-#### │   ├── mutation_landscape/
-#### │   ├── DEG_plots/
-#### │   ├── enrichment_analysis/
-#### │   ├── scRNAseq/
-#### │   └── survival_curves/
-#### ├── results/
-#### │   ├── DEG_tables/
-#### │   ├── enrichment_results/
-#### │   └── survival_tables/
-#### ├── README.md
+
 ## Contenidos
 #### • Scripts en R completamente anotados utilizados para reproducir todos los análisis.
 #### • Tablas de resultados procesados (DEGs, salidas de enriquecimiento, resúmenes de supervivencia).
@@ -79,24 +62,6 @@
 #### •	survival, survminer – survival analyses
 #### •	Seurat – single-cell RNA-seq analysis
 #### •	ggplot2 – data visualization
-##  Repository structure
-#### ├── scripts/
-#### │   ├── genomics/
-#### │   ├── transcriptomics/
-#### │   ├── proteomics/
-#### │   ├── scRNAseq/
-#### │   └── survival/
-#### ├── figures/
-#### │   ├── mutation_landscape/
-#### │   ├── DEG_plots/
-#### │   ├── enrichment_analysis/
-#### │   ├── scRNAseq/
-#### │   └── survival_curves/
-#### ├── results/
-#### │   ├── DEG_tables/
-#### │   ├── enrichment_results/
-#### │   └── survival_tables/
-#### ├── README.md
 
 ## Contents
 #### •	Fully annotated R scripts used to reproduce all analyses.
