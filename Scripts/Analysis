@@ -1,0 +1,6 @@
+
+# ====================== Comparación de perfiles mutacionales ===============================
+
+# Genes mutados entre EGFR y KRAS (top 15)
+comp_res <- read.csv(file.path(output_dir, "EGFR_vs_KRAS_mafCompare_results.csv"))
+knitr::kable(head(comp_res, 15), caption = "Genes mutados entre EGFR y KRAS (top 15)")
