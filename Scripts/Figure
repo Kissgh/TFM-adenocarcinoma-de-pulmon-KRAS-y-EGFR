@@ -1,3 +1,166 @@
 
-#Oncoplot global (No filtado por EGFR ni KRAS)
+# ====================== FIGURES ===============================
+
+# FIGURA 1. GRAFICO DE BARRAS # Porcentaje de mutaciones por gen
+
+ggplot(freq_table, aes(x = Gene, y = Percent, fill = Gene)) +
+  geom_bar(stat = "identity", width = 0.6) +
+  geom_text(aes(label = sprintf("%.1f%%", Percent)), vjust = -0.5, size = 4) +
+  labs(title = "Porcentaje de mutaciones por gen", x = "Hugo_Symbol", y = "Porcentaje (%)") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# ===============================================================
+# FIGURA 2. GRÁFICO DE PASTEL SUBFRAGMENTADO # Análisis de Mutaciones según por el codon especifico mutado
+
+# Columna combinada gen-codón
+freq_table <- freq_table %>%
+  mutate(Gene_Codon = paste(Hugo_Symbol, Codon, sep = "."))
+
+# Factor ordenado
+freq_table$Gene_Codon <- factor(freq_table$Gene_Codon,
+                                levels = sort(unique(freq_table$Gene_Codon)))
+
+# Paletas de color por gen
+egfr_colors <- colorRampPalette(c("#FF8C82", "#FFB3A7"))(
+  sum(freq_table$Hugo_Symbol == "EGFR")
+)
+kras_colors <- colorRampPalette(c("#00cccc", "#66ffff"))(
+  sum(freq_table$Hugo_Symbol == "KRAS")
+)
+
+palette_colors <- c(
+  setNames(egfr_colors, levels(freq_table$Gene_Codon)[grep("EGFR", levels(freq_table$Gene_Codon))]),
+  setNames(kras_colors, levels(freq_table$Gene_Codon)[grep("KRAS", levels(freq_table$Gene_Codon))])
+)
+
+# Grafico
+p <- ggplot(freq_table, aes(x = "", y = Percent, fill = Gene_Codon)) +
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0) +
+  labs(
+    title = "Distribución de mutaciones EGFR y KRAS por codón",
+    fill = "Gen y codón mutado"
+  ) +
+  theme_void() +
+  geom_text(aes(label = sprintf("%s\n%.1f%%", Codon, Percent)),
+            position = position_stack(vjust = 0.5),
+            size = 2, color = "black") +
+  scale_fill_manual(values = palette_colors)
+
+print(p)
+
+# Guardar
+ggsave(
+  filename = "/Users/kissyguevara/Desktop/MASTER/TFM/Figuras/pie_mutaciones_EGFR_KRAS_codones.png",
+  plot = p,
+  width = 10,
+  height = 8,
+  dpi = 300
+)
+
+#===============================================================
+# FIGURA 3. ONCOPLOTS 
+
+# ONCOPLOT GLOBAL (No filtado por EGFR ni KRAS)
 oncoplot(maf = TCGAmutations::tcga_load(study = "LUAD"), top = 70)
+
+# ONCOPLOT FILTRADOS # Excluyendo long genes o FLAG genes
+# Debe estar cargado el MAF global de LUAD
+
+#  Lista de "LONG GENES" (FLAG GENES)
+
+flag_genes <- c(
+  "TTN", "MUC16", "RYR2", "CSMD3", "LRP1B",
+  "SYNE1", "FLG", "FAT1", "FAT3", "FAT4",
+  "PCLO", "KMT2C", "KMT2D", "ANKRD30A",
+  "COL11A1", "FBN2", "DST", "PKHD1",
+  "KIAA1109", "MACF1"
+)
+
+# Extraer tabla de mutaciones del MAF global
+
+maf_dt_clean <- luad_maf@data %>%
+  as.data.frame(stringsAsFactors = FALSE) %>%
+  dplyr::select(Hugo_Symbol, Tumor_Sample_Barcode) %>%
+  dplyr::distinct()
+
+# Identificar muestras EGFR / KRAS
+
+egfr_samples <- maf_dt_clean %>%
+  filter(Hugo_Symbol == "EGFR") %>%
+  pull(Tumor_Sample_Barcode)
+
+kras_samples <- maf_dt_clean %>%
+  filter(Hugo_Symbol == "KRAS") %>%
+  pull(Tumor_Sample_Barcode)
+
+# Muestras sin EGFR ni KRAS
+
+all_samples <- unique(luad_maf@clinical.data$Tumor_Sample_Barcode)
+non_egfr_kras <- setdiff(all_samples, union(egfr_samples, kras_samples))
+
+# Crear objetos MAF de cada subgrupo
+
+maf_egfr <- subsetMaf(maf = luad_maf, tsb = egfr_samples, mafObj = TRUE, includeSyn = TRUE)
+maf_kras <- subsetMaf(maf = luad_maf, tsb = kras_samples, mafObj = TRUE, includeSyn = TRUE)
+maf_none <- subsetMaf(maf = luad_maf, tsb = non_egfr_kras, mafObj = TRUE, includeSyn = TRUE)
+
+# Eliminar Flag genes y reconstruir MAF 
+
+remove_flag_genes <- function(maf_obj, flag_genes) {
+
+  # Extrae tabla del MAF
+  maf_df <- maf_obj@data
+
+  # Arreglar nombres duplicados de columnas
+  colnames(maf_df) <- make.names(colnames(maf_df), unique = TRUE)
+
+  # Filtra FLAG genes
+  maf_df_filt <- maf_df %>% 
+    dplyr::filter(!Hugo_Symbol %in% flag_genes)
+
+  # Reconstruye MAF
+  new_maf <- read.maf(maf_df_filt)
+
+  return(new_maf)
+}
+
+# Aplicar filtrado a cada MAF
+
+maf_egfr_filt <- remove_flag_genes(maf_egfr, flag_genes)
+maf_kras_filt <- remove_flag_genes(maf_kras, flag_genes)
+maf_none_filt <- remove_flag_genes(maf_none, flag_genes)
+
+# Graficar oncoplots filtrados sin FLAG genes
+
+# Guardar
+png(filename = paste0(out_dir, "EGFR-mutated samples (FLAG genes removed).png"), width = 1800, height = 1200, res = 150)
+oncoplot(
+  maf = maf_egfr_filt,
+  top = 20,
+  removeNonMutated = TRUE,
+  titleText = "EGFR-mutated samples (FLAG genes removed)"
+)
+dev.off()
+
+
+png(filename = paste0(out_dir, "KRAS-mutated samples (FLAG genes removed).png"), width = 1800, height = 1200, res = 150)
+oncoplot(
+  maf = maf_kras_filt,
+  top = 20,
+  removeNonMutated = TRUE,
+  titleText = "KRAS-mutated samples (FLAG genes removed)"
+)
+dev.off()
+
+
+png(filename = paste0(out_dir, "Non-EGFRKRAS samples (FLAG genes removed).png"), width = 1800, height = 1200, res = 150)
+oncoplot(
+  maf = maf_none_filt,
+  top = 20,
+  removeNonMutated = TRUE,
+  titleText = "Non-EGFR/KRAS samples (FLAG genes removed)"
+)
+dev.off()
+
