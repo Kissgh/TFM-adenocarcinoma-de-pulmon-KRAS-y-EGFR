@@ -1,11 +1,98 @@
+# ====================== ANÁLISIS GENERAL DE MUTACIONES ==============================
 
-# ====================== Comparación de perfiles mutacionales ===============================
+gene_summary <- getGeneSummary(luad_maf) %>% arrange(desc(AlteredSamples))
+genes_of_interest <- c("EGFR", "KRAS") #Filtro por mis dos genes de interes ya que el análisis total puede ser muy pesado
+
+maf_dt_clean <- luad_maf@data %>%
+  as.data.frame(stringsAsFactors = FALSE) %>%
+  dplyr::select(Hugo_Symbol, Tumor_Sample_Barcode) %>%
+  dplyr::distinct()
+
+colnames(maf_dt_clean)
+
+egfr_samples <- maf_dt_clean %>%
+  filter(Hugo_Symbol == "EGFR") %>%
+  pull(Tumor_Sample_Barcode) %>%
+  unique() %>% sort()
+
+kras_samples <- maf_dt_clean %>%
+  filter(Hugo_Symbol == "KRAS") %>%
+  pull(Tumor_Sample_Barcode) %>%
+  unique() %>% sort()
+
+cat("Número de muestras con mutaciones EGFR:", length(egfr_samples), "\n")
+cat("Número de muestras con mutaciones KRAS:", length(kras_samples), "\n")
+
+write.csv(data.frame(EGFR_samples = egfr_samples),
+          file = file.path(output_dir, "EGFR_mutated_samples_LUAD.csv"),
+          row.names = FALSE)
+
+write.csv(data.frame(KRAS_samples = kras_samples),
+          file = file.path(output_dir, "KRAS_mutated_samples_LUAD.csv"),
+          row.names = FALSE)
+
+egfr_maf <- subsetMaf(maf = luad_maf, tsb = egfr_samples, mafObj = TRUE)
+kras_maf <- subsetMaf(maf = luad_maf, tsb = kras_samples, mafObj = TRUE)
+
+comp_res <- mafCompare(m1 = egfr_maf,
+                       m2 = kras_maf,
+                       m1Name = "EGFR_mut",
+                       m2Name = "KRAS_mut",
+                       minMut = 3)
+
+write.csv(comp_res$results,
+          file = file.path(output_dir, "EGFR_vs_KRAS_mafCompare_results.csv"),
+          row.names = FALSE)
+
+total_samples <- unique(luad_maf@clinical.data$Tumor_Sample_Barcode) %>% length()
+
+freq_table <- data.frame(
+  Gene = genes_of_interest,
+  AlteredSamples = c(length(egfr_samples), length(kras_samples)),
+  Percent = c(length(egfr_samples), length(kras_samples)) / total_samples * 100,
+  Total_Samples = total_samples
+)
+
+write.csv(freq_table,
+          file = file.path(output_dir, "EGFR and KRAS mutation frequencies in LUAD.csv"),
+          row.names = FALSE)
+
+# Coocurrencia
+onc_matrix <- maftools::oncoplot(maf = luad_maf, writeMatrix = TRUE)$oncoMatrix
+
+if (all(genes_of_interest %in% rownames(onc_matrix))) {
+  egfr_kras_matrix <- onc_matrix[genes_of_interest, , drop = FALSE]
+  total_samples <- ncol(egfr_kras_matrix)
+  egfr_pos <- colSums(egfr_kras_matrix["EGFR", , drop = FALSE] != 0) > 0
+  kras_pos <- colSums(egfr_kras_matrix["KRAS", , drop = FALSE] != 0) > 0
+  both <- sum(egfr_pos & kras_pos)
+  only_egfr <- sum(egfr_pos & !kras_pos)
+  only_kras  <- sum(kras_pos & !egfr_pos)
+  neither     <- total_samples - (both + only_egfr + only_kras)
+  co_table <- data.frame(Condition = c("Both", "Only_EGFR", "Only_KRAS", "Neither"),
+                         Count = c(both, only_egfr, only_kras, neither))
+  write.csv(co_table,
+            file = file.path(output_dir, "EGFR_KRAS_cooccurrence_LUAD.csv"),
+            row.names = FALSE)
+}
+
+saveRDS(egfr_maf, file = file.path(output_dir, "EGFR_subset_maf_LUAD.rds"))
+saveRDS(kras_maf, file = file.path(output_dir, "KRAS_subset_maf_LUAD.rds"))
+
+
+
+# Revisión de datos guardados
+# Resumen general de mutaciones (todo el objeto Maf)
+luad_maf <- readRDS(file.path(output_dir, "EGFR_subset_maf_LUAD.rds")) 
+print(luad_maf)
+View(luad_maf)
+
+# ====================== COMPARACIÓN DE PERFILES MUTACIONALES ===============================
 
 # Genes mutados entre EGFR y KRAS (top 15)
 comp_res <- read.csv(file.path(output_dir, "EGFR_vs_KRAS_mafCompare_results.csv"))
 knitr::kable(head(comp_res, 15), caption = "Genes mutados entre EGFR y KRAS (top 15)")
 
-#-----------------------------------------
 # Resumen de  tipos de mutación # Excluyendo long genes o FLAG genes
 
 get_mutation_summary <- function(maf_obj) {
@@ -50,11 +137,9 @@ egfr_summary
 kras_summary
 no_egfr_no_kras_summary
 
-#-----------------------------------------
 # Análisis de Mutaciones según por el codon especifico mutado
 # solo mutaciones con ≥5 ocurrencias, porque hay muchas mutaciones raras y se solapan
 
-# ===============================================================
 # Recargar y normalizar el objeto MAF (luad_maf)
 
 luad_maf <- TCGAmutations::tcga_load(study = "LUAD")
@@ -72,7 +157,6 @@ luad_maf@data$Hugo_Symbol[luad_maf@data$Hugo_Symbol %in% c("K-RAS", "K RAS")] <-
 cat("Mutaciones encontradas para KRAS:\n")
 table(luad_maf@data$Hugo_Symbol)[grep("KRAS", names(table(luad_maf@data$Hugo_Symbol)))]
 
-# ===============================================================
 # Subset del MAF solo con EGFR y KRAS
 
 egfr_kras <- subsetMaf(luad_maf, genes = c("EGFR", "KRAS"), mafObj = FALSE)
@@ -80,7 +164,6 @@ egfr_kras <- subsetMaf(luad_maf, genes = c("EGFR", "KRAS"), mafObj = FALSE)
 # Aseguramos formato data.frame para dplyr
 egfr_kras <- as.data.frame(egfr_kras)
 
-# ===============================================================
 # Limpieza y conteo de mutaciones por gen y codón
 
 mut_summary <- egfr_kras %>%
@@ -100,3 +183,139 @@ freq_table <- mut_summary %>%
 freq_table %>% arrange(desc(Count))
 
 
+
+# ====================== ANALISIS DE EXPRESIÓN GÉNICA (RNA-seq) de TCGA-LUAD ===================
+
+# Cargar subsets (EGFR y KRAS) creados antes
+
+output_dir <- "/Users/kissyguevara/Desktop/MASTER/TFM/Datos R"
+
+egfr_only <- readRDS(file.path(output_dir, "LUAD_subset_EGFR_only.rds"))
+kras_only <- readRDS(file.path(output_dir, "LUAD_subset_KRAS_only.rds"))
+
+egfr_samples <- unique(egfr_only@data$Tumor_Sample_Barcode)
+kras_samples <- unique(kras_only@data$Tumor_Sample_Barcode)
+
+cat("EGFR samples:", length(egfr_samples), "\n")
+cat("KRAS samples:", length(kras_samples), "\n")
+
+
+# Descargar datos de expresión génica (RNA-seq) de TCGA-LUAD
+
+query_exp <- GDCquery(
+  project = "TCGA-LUAD",
+  data.category = "Transcriptome Profiling",
+  data.type = "Gene Expression Quantification",
+  workflow.type = "STAR - Counts" 
+)
+
+GDCdownload(query_exp)
+data_exp <- GDCprepare(query = query_exp)
+
+# Preparar matriz de expresión y metadatos
+
+exp_matrix <- assay(data_exp)
+metadata <- colData(data_exp)
+
+# Convertir nombres de columnas (muestras) al formato TCGA estándar (15 caracteres)
+colnames(exp_matrix) <- substr(colnames(exp_matrix), 1, 15)
+
+
+# Filtrar muestras EGFR vs KRAS
+
+egfr_exp <- exp_matrix[, colnames(exp_matrix) %in% substr(egfr_samples, 1, 15)]
+kras_exp <- exp_matrix[, colnames(exp_matrix) %in% substr(kras_samples, 1, 15)]
+
+cat("Muestras con datos de expresión - EGFR:", ncol(egfr_exp), "\n")
+cat("Muestras con datos de expresión - KRAS:", ncol(kras_exp), "\n")
+
+
+# Análisis diferencial con DESeq2 (EGFR vs KRAS)
+
+if (!requireNamespace("DESeq2", quietly = TRUE)) BiocManager::install("DESeq2")
+library(DESeq2)
+
+# Crear un objeto con solo las muestras de interés
+common_genes <- intersect(rownames(egfr_exp), rownames(kras_exp))
+combined_exp <- cbind(egfr_exp[common_genes, ], kras_exp[common_genes, ])
+group <- factor(c(rep("EGFR", ncol(egfr_exp)), rep("KRAS", ncol(kras_exp))))
+
+dds <- DESeqDataSetFromMatrix(
+  countData = round(combined_exp),
+  colData = data.frame(group),
+  design = ~ group
+)
+
+dds <- DESeq(dds)
+res <- results(dds)
+
+# Ordenar por significancia
+res_ordered <- res[order(res$padj), ]
+
+# Guardar resultados
+write.csv(as.data.frame(res_ordered),
+          file = file.path(output_dir, "DEG_EGFR_vs_KRAS_LUAD.csv"),
+          row.names = TRUE)
+
+cat("Resultados guardados en DEG_EGFR_vs_KRAS_LUAD.csv\n")
+
+# Convertir a data frame para ver mejor los diferenciados 
+res_df <- as.data.frame(res)
+
+# Filtrar genes con padj < 0.05
+deg_signif <- res_df[!is.na(res_df$padj) & res_df$padj < 0.05, ]
+
+# Número total de genes diferencialmente expresados
+cat("Número de genes diferencialmente expresados (padj < 0.05):", nrow(deg_signif), "\n")
+
+# separar en regulados positivamente y negativamente
+upregulated <- deg_signif[deg_signif$log2FoldChange > 0, ]
+downregulated <- deg_signif[deg_signif$log2FoldChange < 0, ]
+
+cat("Genes sobreexpresados en EGFR vs KRAS:", nrow(upregulated), "\n")
+cat("Genes subexpresados en EGFR vs KRAS:", nrow(downregulated), "\n")
+
+# Top 15 genes diferenciales
+
+# Convertir rownames a IDs de Ensembl sin versión
+gene_ids <- gsub("\\..*", "", rownames(res_ordered))
+
+# Mapear a símbolos de genes
+gene_symbols <- mapIds(
+  org.Hs.eg.db,
+  keys = gene_ids,
+  column = "SYMBOL",
+  keytype = "ENSEMBL",
+  multiVals = "first"
+)
+
+# Agregar símbolos a la tabla de resultados
+res_ordered$symbol <- gene_symbols
+
+# Filtrar genes significativos (padj < 0.05)
+deg_signif <- res_ordered[!is.na(res_ordered$padj) & res_ordered$padj < 0.05, ]
+
+# Excluir genes sin símbolo
+deg_signif <- deg_signif[!is.na(deg_signif$symbol), ]
+
+# Ordenar por padj
+deg_signif <- deg_signif[order(deg_signif$padj), ]
+
+# Seleccionar top 15
+top15_named <- deg_signif[1:15, c("symbol", "log2FoldChange", "pvalue", "padj")]
+
+# Agregar columna de regulación
+top15_named$Regulation <- ifelse(top15_named$log2FoldChange > 0, "Sobreexpresado", "Subexpresado")
+
+# Mostrar tabla
+print(top15_named)
+
+
+# Mejor visualización en tabla (Tabla 1) 
+if (requireNamespace("knitr", quietly = TRUE)) {
+  knitr::kable(top15_named, caption = "Top 15 genes más diferencialmente expresados (EGFR vs KRAS)")
+}
+
+# Guardar
+write.csv(top15_named, "Top15_DEGs_EGFR_vs_KRAS.csv", row.names = FALSE)
+saveRDS(dds, file = file.path(output_dir, "DESeq2_EGFR_vs_KRAS_LUAD.rds"))
