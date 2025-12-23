@@ -1,9 +1,9 @@
 
 ###############################################################################
 # Análisis de mutaciones TCGA MC3 (LUAD) — EGFR vs KRAS
-# Autor: Kissy Guevara (TFM)
+# Autor: Kissy Guevara-Hoyer (TFM)
 # Descripción:
-#   - Analiza mutaciones EGFR/KRAS en LUAD (TCGA MC3)
+#   - Analizar mutaciones EGFR/KRAS en LUAD (TCGA MC3) y AACR GENIE
 ###############################################################################
 
 # ====================== CONFIGURACIÓN INICIAL ===============================
@@ -100,7 +100,7 @@ cat("Número de muestras RPPA coincidentes:", length(samples_in_rppa), "\n")
 rppa_subset <- rppa %>% filter(short_id %in% samples_in_rppa)
 
 
-# ====================== DATOS DE RNAseq ======================================
+# ====================== DATOS DE RNAseq Single cell ======================================
 #library(Seurat)
 
 # Cargar expresión cruda directamente desde el archivo comprimido ya descargado
@@ -110,7 +110,7 @@ expr <- readRDS(gzcon(file("/Users/kissyguevara/Desktop/MASTER/TFM/Datos R/GSE13
 genes_encontrados <- grep("EGFR|KRAS", rownames(expr), value = TRUE)
 genes_encontrados
 
-# Filtrar solo esos genes directamente desde la matriz cruda (sino da error)
+# Filtrar solo esos genes directamente desde la matriz cruda (sino da error por lo grande)
 
 genes_interes <- genes_encontrados  
 expr_subset <- expr[rownames(expr) %in% genes_interes, ]
