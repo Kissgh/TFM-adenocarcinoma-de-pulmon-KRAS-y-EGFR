@@ -27,8 +27,8 @@
 ## Contenidos
 #### • Scripts en R utilizados para reproducir todos los análisis.
 #### • Tablas de resultados procesados (DEGs, salidas de enriquecimiento, resúmenes de supervivencia).
-#### • Figuras de alta resolución utilizadas en el trabajo.
-#### • Documentación que describe los pasos analíticos y los supuestos.
+#### • Figuras utilizadas en el trabajo.
+#### • Documentación que describe los pasos analíticos.
 ## Reproducibilidad
 #### Todos los análisis están diseñados para ser reproducibles utilizando conjuntos de datos disponibles públicamente. 
 ## Contexto académico
@@ -40,7 +40,7 @@
 # English
 # Integrative multi-omic analysis of EGFR- and KRAS-driven lung adenocarcinoma
 ## Project overview
-#### This repository contains all the code, figures and supporting materials used in a Master’s Thesis focused on the integrative molecular characterization of lung adenocarcinoma (LUAD), with special emphasis on tumors driven by EGFR and KRAS mutations. The project combines genomic, transcriptomic, proteomic and single-cell RNA-seq analyses, as well as survival analyses, to investigate biological differences, functional pathways and clinical implications associated with each molecular subtype.
+#### This repository contains all the code, figures and supporting materials used in the Master's Thesis of the Master's Degree in Bioinformatics and Biostatistics, authored by Kissy Guevara-Hoyer, focused on the integrative molecular characterization of lung adenocarcinoma (LUAD), with special emphasis on tumors driven by EGFR and KRAS mutations. The project combines genomic, transcriptomic, proteomic and single-cell RNA-seq analyses, as well as survival analyses, to investigate biological differences, functional pathways and clinical implications associated with each molecular subtype.
 #### Publicly available large-scale cancer datasets, including TCGA and AACR GENIE, were leveraged to ensure robustness, reproducibility and clinical relevance of the results.
 ## Objectives
 #### •	Characterize the mutational landscape of EGFR- and KRAS-mutated LUAD.
@@ -66,7 +66,7 @@
 ## Contents
 #### •	R scripts used to reproduce all analyses.
 #### •	Processed result tables (DEGs, enrichment outputs, survival summaries).
-#### •	High-resolution figures used in the thesis.
+#### •	Figures used in the thesis.
 #### •	Documentation describing analytical steps and assumptions.
 ## Reproducibility
 #### All analyses are designed to be reproducible using publicly available datasets. 
