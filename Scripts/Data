@@ -1,7 +1,8 @@
 
 ###############################################################################
-# Análisis de mutaciones TCGA MC3 (LUAD) — EGFR vs KRAS
+# Caracterización ómica de adenocarcinomas de pulmón con mutaciones en KRAS y EGFR: estudio comparativo basado en cohortes públicas de referencia
 # Autor: Kissy Guevara-Hoyer (TFM)
+# Máster en Bioinformática y Bioestadística
 # Descripción:
 #   - Analizar mutaciones EGFR/KRAS en LUAD (TCGA MC3) y AACR GENIE
 ###############################################################################
