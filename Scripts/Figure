@@ -310,7 +310,7 @@ ggplot(rppa_long_top, aes(x = Group, y = Expression, fill = Group)) +
   scale_fill_manual(values = c("EGFR" = "#FF6F61", "KRAS" = "#6A5ACD"))
 
 dev.off()
-cat("✅ Boxplots guardados en:", boxplot_file, "\n")
+cat(" Boxplots guardados en:", boxplot_file, "\n")
 
 #===============================================================
 # FIGURA 8. VOLCANO PLOT RPPA (EGFR vs KRAS)
@@ -472,4 +472,12 @@ ggsave(
 )
 
 cat("\nAnálisis Kaplan-Meier completado correctamente.\n")
+
+
+#===============================================================
+# FIGURA 12. Comparación del perfil mutacional entre los subgrupos moleculares entre los grupos (A) EGFR y (B) KRAS de la cohorte de GENIE. 
+
+# FIGURA 13. Supervivencia global de entre los grupos EGFR y KRAS de la cohorte GENIE.
+
+Fuente consorcio AACR Project GENIE y GENIE-BPC NSCLC v2.0-public a través de la plataforma cBioPortal for Cancer Genomics
 
