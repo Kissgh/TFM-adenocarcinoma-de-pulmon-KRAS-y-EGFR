@@ -497,7 +497,7 @@ write.csv(signif_proteins,
           row.names = FALSE)
 
 
-# ====================== ANÁLISIS DE RNAseq Singlecel======================================
+# ====================== ANÁLISIS DE RNAseq Single cell======================================
 
 # Resumen estadístico básico por gen
 
@@ -623,3 +623,120 @@ surv_df <- clin_df %>%
 
 
 # ====================== ANÁLISIS GENIE ======================================
+
+# Alteraciones Génomicas
+# Inspección general:
+data <- read.delim("~/Desktop/MASTER/TFM/Datos R/GENIE/DATA  Genomic Alterations ENTRE LOS GRUPOS.tsv")
+head(data)
+View (data)
+
+data$p.Value <- as.numeric(data$p.Value) # Convertir p-value y q-value a numéricos 
+data$q.Value <- as.numeric(data$q.Value) # Convertir p-value y q-value a numéricos 
+
+# Filtrar genes significativamente diferentes entre grupos
+significant <- subset(data, q.Value < 0.05)
+
+# Ver genes enriquecidos en EGFR
+EGFR_enriched <- subset(significant, Enriched.in == "EGFR")
+
+# Ver genes enriquecidos en KRAS
+KRAS_enriched <- subset(significant, Enriched.in == "KRAS")
+
+# Ordenar por significancia
+EGFR_enriched <- EGFR_enriched[order(EGFR_enriched$q.Value), ]
+KRAS_enriched <- KRAS_enriched[order(KRAS_enriched$q.Value), ]
+
+# Guardar
+write.table(EGFR_enriched, "Genes_enriquecidos_GENIE_en_EGFR.tsv", sep="\t", row.names=FALSE)
+write.table(KRAS_enriched, "Genes_enriquecidos_GENIE_en_KRAS.tsv", sep="\t", row.names=FALSE)
+
+--
+# Análisis por tipo de mutación
+Genie_all_samples <- read.delim("~/Desktop/MASTER/TFM/Datos R/GENIE/DATA COMPLETA alterations_across_samples (1).tsv")
+View(Genie_all_samples)
+
+# Columnas con alteraciones reales
+alter_cols <- c("EGFR..MUT", "EGFR..FUSION", "EGFR..AMP", "EGFR..HOMDEL",
+                "KRAS..MUT", "KRAS..FUSION", "KRAS..AMP", "KRAS..HOMDEL")
+
+# Conteo de muestras por alteración
+alter_counts <- sapply(alter_cols, function(col){
+  sum(Genie_all_samples[[col]] != "no alteration", na.rm = TRUE)
+})
+alter_counts
+
+# Función para calcular top 5 genes por tipo de alteración
+
+top5_alterations <- function(df, col_name) {
+  
+
+  alterations <- df[[col_name]][df[[col_name]] != "no alteration"]   # Filtrar solo valores distintos de "no alteration"
+  if(length(alterations) == 0) return(NULL)   # Si no hay alteraciones, devolver NULL
+  
+  counts <- table(alterations)   # Contar frecuencia de cada alteración
+  top5 <- sort(counts, decreasing = TRUE)[1:min(5, length(counts))]   # Ordenar y tomar top 5
+  top5_df <- data.frame(   # Convertir a data frame con porcentaje y grupo
+    Group = col_name,
+    Alteration = names(top5),
+    Count = as.numeric(top5),
+    Percent = round(100 * as.numeric(top5) / length(alterations), 2)
+  )
+  
+  return(top5_df)
+}
+
+# Aplicar la función a todas las columnas de alteración
+results_top5_list <- lapply(alter_cols, function(col) {
+  top5_alterations(Genie_all_samples, col)
+})
+
+# Unir todos los resultados en un solo data.frame
+results_top5_df <- do.call(rbind, results_top5_list)
+
+# Ver resultados
+results_top5_df
+
+# Guardar 
+write.table(results_top5_df, "results_top5_df_Todas las alteraciones de GENIE", sep="\t", row.names=FALSE)
+
+---
+# Análisis por tipo de mutación en px con mutación EFGR asociada
+
+MUTACION.LIST.EGFR <- read.delim("~/Desktop/MASTER/TFM/Datos R/GENIE/MUTACION LIST EGFR.tsv")
+View(MUTACION.LIST.EGFR)
+
+mutation_counts <- table(MUTACION.LIST.EGFR$Mutation.Type)
+
+mutation_df <- as.data.frame(mutation_counts)
+colnames(mutation_df) <- c("Mutation.Type", "Count")
+
+mutation_df$Percent <- round(100 * mutation_df$Count / sum(mutation_df$Count), 2) # Calcular porcentaje
+
+mutation_df <- mutation_df[order(-mutation_df$Count), ] # Ordenar de mayor a menor
+
+mutation_df
+
+# Guardar 
+write.table(mutation_df, "mutation_df_EGFR", sep="\t", row.names=FALSE)
+
+
+---
+# Análisis por tipo de mutación en px con mutación KRAS asociada
+
+MUTACION.LIST.KRAS <- read.delim("~/Desktop/MASTER/TFM/Datos R/GENIE/MUTACION LIST KRAS.tsv")
+View(MUTACION.LIST.KRAS)
+
+mutation_counts <- table(MUTACION.LIST.KRAS$Mutation.Type)
+
+mutation_df <- as.data.frame(mutation_counts)
+colnames(mutation_df) <- c("Mutation.Type", "Count")
+
+mutation_df$Percent <- round(100 * mutation_df$Count / sum(mutation_df$Count), 2) # Calcular porcentaje
+
+mutation_df <- mutation_df[order(-mutation_df$Count), ] # Ordenar de mayor a menor
+
+mutation_df
+
+# Guardar 
+write.table(mutation_df, "mutation_df_KRAS", sep="\t", row.names=FALSE)
+
