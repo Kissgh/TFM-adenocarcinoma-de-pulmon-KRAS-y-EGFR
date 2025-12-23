@@ -497,12 +497,12 @@ write.csv(signif_proteins,
           row.names = FALSE)
 
 
-# ====================== ANÁLISIS DE RNAseq ======================================
+# ====================== ANÁLISIS DE RNAseq Singlecel======================================
 
 # Resumen estadístico básico por gen
 
 for (gene in rownames(seu_subset)) {
-  cat("\n📊 Expresión resumida para", gene, ":\n")
+  cat("\n Expresión resumida para", gene, ":\n")
   expr_vals <- as.numeric(GetAssayData(seu_subset, slot = "counts")[gene, ])
   print(summary(expr_vals))
   cat("Células con expresión > 0:", sum(expr_vals > 0), "\n")
@@ -528,7 +528,7 @@ expr_summary <- expr_df %>%
     prop_KRAS_pos = mean(KRAS > 0)
   )
 
-cat("\n📈 Resumen comparativo entre EGFR y KRAS:\n")
+cat("\n Resumen comparativo entre EGFR y KRAS:\n")
 print(expr_summary)
 
 
